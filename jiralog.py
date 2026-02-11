@@ -6,14 +6,20 @@ import re
 import argparse
 import sys
 from colorama import Fore, init
+from dotenv import load_dotenv
 
-# Инициализация colorama для цветного вывода
+# Загрузка переменных из .env файла
+load_dotenv()
+
 init(autoreset=True)
 
 # Настройки Jira API
-JIRA_BASE_URL = ''
-JIRA_USERNAME = ''
-JIRA_API_TOKEN = ''
+JIRA_BASE_URL = os.environ.get('JIRA_BASE_URL')
+JIRA_USERNAME = os.environ.get('JIRA_USERNAME')
+JIRA_API_TOKEN = os.environ.get('JIRA_API_TOKEN')
+if not JIRA_BASE_URL or not JIRA_USERNAME or not JIRA_API_TOKEN:
+    print(f"{Fore.LIGHTRED_EX}❌ Ошибка: Установите переменные окружения JIRA_BASE_URL, JIRA_USERNAME и JIRA_API_TOKEN.")
+    exit(1)
 
 # Конфигурация
 HEADERS = {
@@ -253,7 +259,7 @@ for item in reports['failed']:
 # Экспорт отчета в файл
 save_report = input("Сохранить отчет в файл? (y/n): ").lower() == 'y'
 if save_report:
-    report_filename = f"worklog_report_{file_date}.txt"
+    report_filename = f"{file_date.strftime('%d.%m.%Y')}_report.txt"
     with open(report_filename, 'w', encoding='utf-8') as f:
         f.write(f"Глобальный отчет ({mode}): {'Успех' if failed_count == 0 and skipped_count == 0 else 'Есть ошибки' if success_count > 0 else 'Провал'}\n")
         f.write(f"Дата и время обрабатываемого дня: {started}\n")
