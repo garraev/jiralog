@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import re
 import argparse
 import sys
+import math  # Добавлен импорт для округления
 from colorama import Fore, init
 from dotenv import load_dotenv
 
@@ -28,21 +29,55 @@ HEADERS = {
     'Accept': 'application/json'
 }
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+LOGS_DIR = os.path.join(SCRIPT_DIR, 'logs')
+REPORTS_DIR = os.path.join(SCRIPT_DIR, 'reports')
+os.makedirs(LOGS_DIR, exist_ok=True)
+os.makedirs(REPORTS_DIR, exist_ok=True)
 
 # Блок функций
+def get_emoji(num):
+    """Возвращает эмоджи для номера."""
+    emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
+    if 1 <= num <= 10:
+        return emojis[num - 1]
+    else:
+        return f"[{num}]"  # fallback для чисел > 10
+
 def select_file():
     """Выбирает JSON файл из директории скрипта."""
-    files = [f for f in os.listdir(SCRIPT_DIR) if f.endswith('.json')]
+    files = [f for f in os.listdir(LOGS_DIR) if f.endswith('.json')]
     if not files:
-        print(f"{Fore.LIGHTRED_EX}❌ Нет JSON файлов в директории.")
+        print(f"{Fore.LIGHTRED_EX}❌ Нет JSON файлов в директории logs/.")
         return None
+
+    # Сортировка файлов по дате из названия DESC (новые первыми), только для файлов с датой в названии
+    files_with_date = []
+    files_without_date = []
+    for f in files:
+        file_path = os.path.join(LOGS_DIR, f)
+        date = parse_date_from_filename(file_path)
+        if date is not None:
+            files_with_date.append((date, f))
+        else:
+            files_without_date.append((None, f))
+
+    # Сортировка файлов с датой по дате DESC
+    files_with_date.sort(key=lambda x: x[0], reverse=True)
+    # Сортировка файлов без даты по имени ASC
+    files_without_date.sort(key=lambda x: x[1])
+
+    # Объединяем: сначала с датами, потом без
+    sorted_files = files_with_date + files_without_date
+
     print(f"{Fore.LIGHTYELLOW_EX}📁 Доступные файлы:")
-    for i, f in enumerate(files, 1):
-        print(f"{i}. {f}")
+    for i, (date, f) in enumerate(sorted_files, 1):
+        emoji = get_emoji(i)
+        print(f" {emoji}  {f}")
     try:
-        choice = int(input("Введите номер файла: ")) - 1
-        if 0 <= choice < len(files):
-            return os.path.join(SCRIPT_DIR, files[choice])
+        choice = int(input(" ➡️  Введите номер файла: ")) - 1
+        if 0 <= choice < len(sorted_files):
+            selected_file = sorted_files[choice][1]
+            return os.path.join(LOGS_DIR, selected_file)
         else:
             print(f"{Fore.LIGHTRED_EX}❌ Неверный выбор.")
             return None
@@ -259,7 +294,7 @@ for item in reports['failed']:
 # Экспорт отчета в файл
 save_report = input("Сохранить отчет в файл? (y/n): ").lower() == 'y'
 if save_report:
-    report_filename = f"{file_date.strftime('%d.%m.%Y')}_report.txt"
+    report_filename = os.path.join(REPORTS_DIR, f"{file_date.strftime('%d.%m.%Y')}_report.txt")
     with open(report_filename, 'w', encoding='utf-8') as f:
         f.write(f"Глобальный отчет ({mode}): {'Успех' if failed_count == 0 and skipped_count == 0 else 'Есть ошибки' if success_count > 0 else 'Провал'}\n")
         f.write(f"Дата и время обрабатываемого дня: {started}\n")
