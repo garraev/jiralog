@@ -6,7 +6,7 @@ import re
 import argparse
 import sys
 import math  # Добавлен импорт для округления
-from colorama import Fore, init
+from colorama import Fore, Back, Style, init
 from dotenv import load_dotenv
 
 # Загрузка переменных из .env файла
@@ -14,12 +14,21 @@ load_dotenv()
 
 init(autoreset=True)
 
+RED, YEL, CYN, GRN, BLU = (
+    Fore.LIGHTRED_EX, Fore.LIGHTYELLOW_EX, Fore.LIGHTCYAN_EX,
+    Fore.LIGHTGREEN_EX, Fore.LIGHTBLUE_EX,
+)
+WHT  = Fore.LIGHTWHITE_EX
+BOLD = Style.BRIGHT
+BBLU = Back.BLUE
+BRST = Back.RESET
+
 # Настройки Jira API
 JIRA_BASE_URL = os.environ.get('JIRA_BASE_URL')
 JIRA_USERNAME = os.environ.get('JIRA_USERNAME')
 JIRA_API_TOKEN = os.environ.get('JIRA_API_TOKEN')
 if not JIRA_BASE_URL or not JIRA_USERNAME or not JIRA_API_TOKEN:
-    print(f"{Fore.LIGHTRED_EX}❌ Ошибка: Установите переменные окружения JIRA_BASE_URL, JIRA_USERNAME и JIRA_API_TOKEN.")
+    print(f"{RED}❌ Ошибка: Установите переменные окружения JIRA_BASE_URL, JIRA_USERNAME и JIRA_API_TOKEN.")
     exit(1)
 
 # Конфигурация
@@ -47,7 +56,7 @@ def select_file():
     """Выбирает JSON файл из директории скрипта."""
     files = [f for f in os.listdir(LOGS_DIR) if f.endswith('.json')]
     if not files:
-        print(f"{Fore.LIGHTRED_EX}❌ Нет JSON файлов в директории logs/.")
+        print(f"{RED}❌ Нет JSON файлов в директории logs/.")
         return None
 
     # Сортировка файлов по дате из названия DESC (новые первыми), только для файлов с датой в названии
@@ -69,7 +78,7 @@ def select_file():
     # Объединяем: сначала с датами, потом без
     sorted_files = files_with_date + files_without_date
 
-    print(f"{Fore.LIGHTYELLOW_EX}📁 Доступные файлы:")
+    print(f"{YEL}📁 Доступные файлы:")
     for i, (date, f) in enumerate(sorted_files, 1):
         emoji = get_emoji(i)
         print(f" {emoji}  {f}")
@@ -79,10 +88,10 @@ def select_file():
             selected_file = sorted_files[choice][1]
             return os.path.join(LOGS_DIR, selected_file)
         else:
-            print(f"{Fore.LIGHTRED_EX}❌ Неверный выбор.")
+            print(f"{RED}❌ Неверный выбор.")
             return None
     except ValueError:
-        print(f"{Fore.LIGHTRED_EX}❌ Введите число.")
+        print(f"{RED}❌ Введите число.")
         return None
 
 def load_json(file_path):
@@ -91,7 +100,7 @@ def load_json(file_path):
         with open(file_path, 'r', encoding='utf-8') as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError) as e:
-        print(f"{Fore.LIGHTRED_EX}❌ Ошибка загрузки JSON: {e}")
+        print(f"{RED}❌ Ошибка загрузки JSON: {e}")
         return None
 
 def parse_date_from_filename(file_path):
@@ -104,10 +113,10 @@ def parse_date_from_filename(file_path):
             return datetime.strptime(date_str, '%d.%m.%Y').date()
         except ValueError:
             pass
-    print(f"{Fore.LIGHTYELLOW_EX}⚠️ Не удалось извлечь дату из имени файла.")
+    print(f"{YEL}⚠️ Не удалось извлечь дату из имени файла.")
     confirm = input("Использовать текущую дату? (y/n): ").lower()
     if confirm != 'y':
-        print(f"{Fore.LIGHTRED_EX}❌ Обработка отменена.")
+        print(f"{RED}❌ Обработка отменена.")
         exit(1)
     return datetime.now(timezone.utc).date()
 
@@ -146,10 +155,10 @@ def get_existing_worklogs(issue_key):
         if response.status_code == 200:
             return response.json().get('worklogs', [])
         else:
-            print(f"{Fore.LIGHTRED_EX}❌ Ошибка получения worklogs для {issue_key}: HTTP {response.status_code}")
+            print(f"{RED}❌ Ошибка получения worklogs для {issue_key}: HTTP {response.status_code}")
             return []
     except requests.RequestException as e:
-        print(f"{Fore.LIGHTRED_EX}❌ Ошибка запроса для {issue_key}: {e}")
+        print(f"{RED}❌ Ошибка запроса для {issue_key}: {e}")
         return []
 
 def worklog_exists(issue_key, comment_text, started):
@@ -186,7 +195,7 @@ def add_worklog(issue_key, started, time_spent_seconds, comment_text, dry_run=Fa
         response = requests.post(url, headers=HEADERS, json=data, timeout=10)
         return response.status_code == 201
     except requests.RequestException as e:
-        print(f"{Fore.LIGHTRED_EX}❌ Ошибка добавления worklog для {issue_key}: {e}")
+        print(f"{RED}❌ Ошибка добавления worklog для {issue_key}: {e}")
         return False
 
 def process_lap(lap, reports, total_logged_seconds, dry_run_messages, dry_run=False):
@@ -215,6 +224,22 @@ def process_lap(lap, reports, total_logged_seconds, dry_run_messages, dry_run=Fa
     else:
         reports['failed'].append(f"Ошибка добавления worklog для {issue_id}: {task_text}")
 
+def group_laps(laps):
+    """Группирует laps по (ISSUE_ID, текст задачи), суммируя время. Возвращает (grouped, invalid)."""
+    grouped = {}
+    invalid = []
+    for lap in laps:
+        issue_id = parse_issue_id(lap['text'])
+        if not issue_id:
+            invalid.append(lap)
+            continue
+        task_text = parse_task_text(lap['text'])
+        key = (issue_id, task_text)
+        if key not in grouped:
+            grouped[key] = {'text': lap['text'], 'diff': 0}
+        grouped[key]['diff'] += lap['diff']
+    return list(grouped.values()), invalid
+
 # Парсинг аргументов командной строки
 parser = argparse.ArgumentParser(description="Загрузка worklog в Jira из JSON файла.")
 parser.add_argument('--dry-run', action='store_true', help="Запуск в режиме dry-run (симуляция без реальных изменений)")
@@ -222,13 +247,35 @@ args = parser.parse_args()
 dry_run = args.dry_run
 
 # Интро
-width = 45
-print("✨" * width)
-print(f"✨ {Fore.LIGHTYELLOW_EX}Добро пожаловать в волшебный скрипт загрузки worklog в Jira!                         ✨")
-print(f"✨ {Fore.LIGHTYELLOW_EX}Этот инструмент поможет вам легко и безопасно добавить время работы из JSON файла.   ✨")
-print(f"✨ {Fore.LIGHTYELLOW_EX}С поддержкой dry-run, прогресс-бара и яркого цветного вывода.                        ✨")
-print(f"✨ {Fore.LIGHTCYAN_EX}Магия начинается! 🪄                                                                 ✨")
-print("✨" * width)
+logo = [
+    "     ██╗██╗██████╗  █████╗ ██╗      ██████╗  ██████╗ ",
+    "     ██║██║██╔══██╗██╔══██╗██║     ██╔═══██╗██╔════╝ ",
+    "     ██║██║██████╔╝███████║██║     ██║   ██║██║  ███╗",
+    "██   ██║██║██╔══██╗██╔══██║██║     ██║   ██║██║   ██║",
+    "╚█████╔╝██║██║  ██║██║  ██║███████╗╚██████╔╝╚██████╔╝",
+    " ╚════╝ ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝ ╚═════╝  ╚═════╝ ",
+]
+WIDTH = 45
+INNER = WIDTH * 2 - 5  # ширина контента: (WIDTH × 2col_per_✨) - ✨(2) - space(1) - ✨(2)
+border = f"{YEL}" + "✨" * WIDTH
+print(border)
+max_logo_w = max(len(line) for line in logo)
+logo_inner_w = max_logo_w + 4
+logo_left  = (INNER - logo_inner_w) // 2
+logo_right = INNER - logo_left - logo_inner_w
+_logo_row = f"{YEL}✨{BBLU}{' ' * (INNER + 1)}{BRST}{YEL}✨"
+print(_logo_row)
+for line in logo:
+    inner = f"  {line:<{max_logo_w}}  "
+    print(f"{YEL}✨{BBLU} {' ' * logo_left}{WHT}{inner}{' ' * logo_right}{BRST}{YEL}✨")
+print(_logo_row)
+print(f"{YEL}✨{BBLU} {'':{INNER}}{BRST}{YEL}✨")
+print(f"{YEL}✨{BBLU} {WHT}Добро пожаловать в волшебный скрипт загрузки worklog в Atlassian Jira!               {BRST}{YEL}✨")
+print(f"{YEL}✨{BBLU} {WHT}Этот инструмент поможет вам легко и безопасно добавить время работы из JSON файла.   {BRST}{YEL}✨")
+print(f"{YEL}✨{BBLU} {WHT}С поддержкой dry-run, прогресс-бара и яркого цветного вывода.                        {BRST}{YEL}✨")
+print(f"{YEL}✨{BBLU} {'':{INNER}}{BRST}{YEL}✨")
+print(f"{YEL}✨{BBLU} {BOLD}{WHT}{'Магия начинается! 🪄':^{INNER - 1}}{BRST}{YEL}✨")
+print(border)
 print()
 
 # Загрузка JSON
@@ -249,19 +296,23 @@ reports = {'success': [], 'failed': [], 'skipped': []}
 total_logged_seconds = [0]
 dry_run_messages = []
 
-# Обработка laps с прогресс-баром
-total = len(data['laps'])
-for i, lap in enumerate(data['laps'], 1):
+# Группировка и обработка laps
+grouped_laps, invalid_laps = group_laps(data['laps'])
+for lap in invalid_laps:
+    reports['failed'].append(f"Не найден ISSUE_ID в: {lap['text']}")
+
+total = len(grouped_laps)
+for i, lap in enumerate(grouped_laps, 1):
     process_lap(lap, reports, total_logged_seconds, dry_run_messages, dry_run)
-    sys.stdout.write(f"\r{Fore.LIGHTYELLOW_EX}🔄 Обработка: {i}/{total} laps ")
+    sys.stdout.write(f"\n\r{YEL} 🔄 Обработка: {i}/{total} задач ")
     sys.stdout.flush()
 print()
 
 # Вывод dry-run сообщений после прогресса
 if dry_run:
-    print(f"{Fore.LIGHTCYAN_EX}🔍 Dry-run симуляция:")
+    print(f"{CYN}🔍 Dry-run симуляция:")
     for msg in dry_run_messages:
-        print(f"{Fore.LIGHTCYAN_EX}{msg}")
+        print(f"{CYN}{msg}")
     print()
 
 # Отчет глобальный (успех/провал/есть ошибки)
@@ -270,26 +321,26 @@ failed_count = len(reports['failed'])
 skipped_count = len(reports['skipped'])
 
 if failed_count == 0 and skipped_count == 0:
-    global_status = f"{Fore.LIGHTGREEN_EX}✅ Успех"
+    global_status = f"{GRN}✅ Успех"
 elif success_count > 0:
-    global_status = f"{Fore.LIGHTYELLOW_EX}⚠️ Есть ошибки"
+    global_status = f"{YEL}⚠️ Есть ошибки"
 else:
-    global_status = f"{Fore.LIGHTRED_EX}❌ Провал"
+    global_status = f"{RED}❌ Провал"
 
 mode = "DRY-RUN" if dry_run else "REAL"
-print(f"\n{Fore.LIGHTYELLOW_EX}📊 Глобальный отчет ({mode}): {global_status}")
-print(f"{Fore.LIGHTCYAN_EX}📅 Дата и время обрабатываемого дня: {started}")
-print(f"{Fore.LIGHTBLUE_EX}🧮 Обработано: {total}, Успешно: {success_count}, Пропущено: {skipped_count}, Ошибок: {failed_count}")
-print(f"{Fore.LIGHTGREEN_EX}🕒 Общая сумма залогированного времени: {format_time(total_logged_seconds[0])}")
+print(f"\n{YEL}📊 Глобальный отчет ({mode}): {global_status}")
+print(f"{CYN}📅 Дата и время обрабатываемого дня: {started}")
+print(f"{BLU}🧮 Обработано: {total}, Успешно: {success_count}, Пропущено: {skipped_count}, Ошибок: {failed_count}")
+print(f"{GRN}🕒 Общая сумма залогированного времени: {format_time(total_logged_seconds[0])}")
 
 # Отчет по записям issues (успех/провал)
-print(f"\n{Fore.LIGHTYELLOW_EX}📝 Отчет по записям:")
+print(f"\n{YEL}📝 Отчет по записям:")
 for item in reports['success']:
-    print(f"{Fore.LIGHTGREEN_EX}✅ Успех: {item}")
+    print(f"{GRN}✅ Успех: {item}")
 for item in reports['skipped']:
-    print(f"{Fore.LIGHTYELLOW_EX}⏭️  Пропущено: {item}")
+    print(f"{YEL}⏭️  Пропущено: {item}")
 for item in reports['failed']:
-    print(f"{Fore.LIGHTRED_EX}❌ Ошибка: {item}")
+    print(f"{RED}❌ Ошибка: {item}")
 
 # Экспорт отчета в файл
 save_report = input("Сохранить отчет в файл? (y/n): ").lower() == 'y'
@@ -307,4 +358,4 @@ if save_report:
             f.write(f"Пропущено: {item}\n")
         for item in reports['failed']:
             f.write(f"Ошибка: {item}\n")
-    print(f"{Fore.LIGHTGREEN_EX}📄 Отчет сохранен в {report_filename}")
+    print(f"{GRN}📄 Отчет сохранен в {report_filename}")
