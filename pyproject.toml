@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jiralog"
+version = "1.0.0"
+description = "CLI tool for uploading Jira worklogs from JSON timer logs"
+requires-python = ">=3.8"
+dependencies = [
+    "requests",
+    "colorama",
+    "python-dotenv",
+]
+
+[project.scripts]
+jiralog = "jiralog.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["jiralog*"]
