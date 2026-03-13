@@ -4,13 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project does
 
-`jiralog` is a single-file Python CLI script (`jiralog.py`) that reads time-tracking JSON logs and bulk-uploads worklogs to Jira via REST API v3.
+`jiralog` is a Python CLI package (`jiralog/`) that reads time-tracking JSON logs and bulk-uploads worklogs to Jira via REST API v3.
 
 ## Running the script
 
 ```bash
-python jiralog.py            # interactive mode — prompts for file selection
-python jiralog.py --dry-run  # simulate without writing to Jira
+# Install once
+pip install -e .
+
+jiralog            # interactive mode — prompts for file selection
+jiralog --dry-run  # simulate without writing to Jira
 ```
 
 Required environment variables in `.env`:
