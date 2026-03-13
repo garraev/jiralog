@@ -1,21 +1,30 @@
-# 🪄 JiraLog
+<div align="center">
+  <img src="assets/logo.png" alt="JiraLog" width="200" />
+  <h1>JiraLog</h1>
+  <p>Автоматическая загрузка worklogs в Jira из JSON-логов таймера</p>
+</div>
 
-> Автоматическая загрузка worklogs в Jira из JSON-логов таймера
-
-```
-     ██╗██╗██████╗  █████╗ ██╗      ██████╗  ██████╗
-     ██║██║██╔══██╗██╔══██╗██║     ██╔═══██╗██╔════╝
-     ██║██║██████╔╝███████║██║     ██║   ██║██║  ███╗
-██   ██║██║██╔══██╗██╔══██║██║     ██║   ██║██║   ██║
-╚█████╔╝██║██║  ██║██║  ██║███████╗╚██████╔╝╚██████╔╝
- ╚════╝ ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝ ╚═════╝  ╚═════╝
-```
+<p align="center">
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.8+-blue.svg" alt="Python 3.8+" /></a>
+  <a href="https://developer.atlassian.com/cloud/jira/platform/rest/v3/"><img src="https://img.shields.io/badge/Jira-REST%20API%20v3-0052CC?logo=jira" alt="Jira REST API v3" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License" /></a>
+</p>
 
 ## Что это
 
-Скрипт читает JSON-файл с записями таймера, группирует время по задачам и загружает worklogs в Jira через REST API. Поддерживает защиту от дублей, dry-run режим и сохранение отчётов.
+JiraLog читает JSON-файл с записями таймера, группирует время по задачам и загружает worklogs в Jira через REST API.
 
----
+- **Защита от дублей**
+
+> Перед каждой записью скрипт проверяет, нет ли уже worklog с таким же комментарием и датой — повторный запуск безопасен.
+
+- **Точное время**
+
+> Jira усекает каждый worklog до целых минут. JiraLog компенсирует потери, округляя нужные записи вверх — итоговое время в Jira совпадает с реальным.
+
+- **Dry-run режим**
+
+> Запусти с `--dry-run`, чтобы увидеть что будет загружено, без реальных изменений в Jira.
 
 ## Установка
 
@@ -31,99 +40,58 @@ JIRA_USERNAME=your@email.com
 JIRA_API_TOKEN=your_api_token
 ```
 
-> Токен можно получить на [id.atlassian.com/manage-profile/security/api-tokens](https://id.atlassian.com/manage-profile/security/api-tokens)
-
----
+> Токен: [id.atlassian.com/manage-profile/security/api-tokens](https://id.atlassian.com/manage-profile/security/api-tokens)
 
 ## Использование
 
 ```bash
-# Обычный запуск — выбор файла из списка, реальная загрузка в Jira
-python jiralog.py
-
-# Dry-run — симуляция без записи в Jira
-python jiralog.py --dry-run
+python jiralog.py            # выбор файла из списка, реальная загрузка
+python jiralog.py --dry-run  # симуляция без записи в Jira
 ```
 
-При запуске скрипт покажет список доступных JSON-файлов из папки `logs/` и предложит выбрать нужный:
+При запуске скрипт покажет список файлов из `logs/` и предложит выбрать нужный:
 
 ```
 📁 Доступные файлы:
  1️⃣  12.03.2026.json
  2️⃣  11.03.2026.json
- 3️⃣  10.03.2026.json
  ➡️  Введите номер файла:
 ```
 
----
-
 ## Формат JSON-файла
 
-Файлы должны лежать в папке `logs/` и называться по дате: `DD.MM.YYYY.json`.
+Файлы должны лежать в `logs/` и называться по дате: `DD.MM.YYYY.json`.
 
 ```json
 {
-  "intervalId": 1,
   "laps": [
-    { "lapId": 1, "diff": 393394,   "elapsedTime": 393394,   "text": "PROJ-1 StandUp" },
-    { "lapId": 2, "diff": 1408876,  "elapsedTime": 1802270,  "text": "PROJ-936 QA" },
-    { "lapId": 3, "diff": 5498295,  "elapsedTime": 7859026,  "text": "PROJ-936 QA" },
-    { "lapId": 4, "diff": 891341,   "elapsedTime": 8750367,  "text": "PROJ-968 Fix after QA & merge PR" },
-    { "lapId": 5, "diff": 4765499,  "elapsedTime": 20235784, "text": "PROJ-987 Development" },
-    { "lapId": 6, "diff": 3436987,  "elapsedTime": 27511645, "text": "PROJ-989 Development" }
-  ],
-  "startTime": 1773302987015,
-  "stopTime":  1773335089361,
-  "state": "stop"
+    { "lapId": 1, "diff": 393394,  "text": "PROJ-1 StandUp" },
+    { "lapId": 2, "diff": 1408876, "text": "PROJ-42 QA" },
+    { "lapId": 3, "diff": 5498295, "text": "PROJ-42 QA" }
+  ]
 }
 ```
 
 | Поле   | Описание |
 |--------|----------|
-| `diff` | Время на этот lap в **миллисекундах** |
-| `text` | `ISSUE_KEY описание` — например, `PROJ-936 QA` |
+| `diff` | Время в миллисекундах |
+| `text` | `ISSUE_KEY описание` — например, `PROJ-42 QA` |
 
-> Laps с одинаковым `ISSUE_KEY + описание` автоматически суммируются перед загрузкой.
+> Laps с одинаковым `ISSUE_KEY + описание` автоматически суммируются.
 
----
-
-## Пример отчёта
-
-После загрузки скрипт показывает сводку и предлагает сохранить её в `reports/`:
+## Пример вывода
 
 ```
 📊 Глобальный отчет (REAL): ✅ Успех
-📅 Дата и время обрабатываемого дня: 2026-03-12T06:00:00.000+0000
+📅 Дата: 2026-03-12T06:00:00.000+0000
 🧮 Обработано: 11, Успешно: 11, Пропущено: 0, Ошибок: 0
-🕒 Общая сумма залогированного времени: 08:55
+🕒 Итого залогировано: 08:55
 
-📝 Отчет по записям:
-✅ Успех: Добавлен worklog для PROJ-936: QA (01:55)
-✅ Успех: Добавлен worklog для PROJ-968: Fix after QA & merge PR (00:15)
-✅ Успех: Добавлен worklog для PROJ-987: Development (01:35)
-✅ Успех: Добавлен worklog для PROJ-989: Development (00:57)
+✅ Добавлен worklog для PROJ-42: QA (01:55)
+✅ Добавлен worklog для PROJ-7: Fix after QA & merge PR (00:15)
 ⏭️  Пропущено: Worklog уже существует для PROJ-1: StandUp
 ```
 
-Файл отчёта сохраняется как `reports/DD.MM.YYYY_report.txt`.
+## License
 
----
-
-## Структура проекта
-
-```
-jiralog/
-├── jiralog.py        # основной скрипт
-├── logs/             # JSON-файлы с данными таймера (DD.MM.YYYY.json)
-├── reports/          # сохранённые отчёты (DD.MM.YYYY_report.txt)
-└── .env              # переменные окружения (не коммитить)
-```
-
----
-
-## Как это работает
-
-1. **Группировка** — laps с одинаковым `(issue_key, описание)` суммируются
-2. **Компенсация минут** — Jira усекает время до целых минут; скрипт округляет вверх записи с наибольшим остатком секунд, чтобы итоговое время в Jira совпало с реальным
-3. **Защита от дублей** — перед каждой записью проверяется, нет ли уже worklog с таким же комментарием и датой
-4. **Дата** — все worklogs получают время `06:00 UTC` того дня, который указан в имени файла
+JiraLog is [MIT licensed](./LICENSE).
